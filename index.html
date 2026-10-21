@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MIX - Laboratorio de Mezclas</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#2563eb" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
+    body { margin: 0; background: #f0f7ff; color: #1e293b; display: flex; justify-content: center; min-height: 100vh; }
+    .screen { display: none; width: 100%; max-width: 420px; background: #ffffff; min-height: 100vh; padding: 24px 20px; flex-direction: column; justify-content: space-between; box-shadow: 0 0 20px rgba(0,0,0,0.08); text-align: center; }
+    .screen.active { display: flex; }
+
+    /* LANDING PAGE (Punto I del apunte) */
+    .hero-badge { background: #dbeafe; color: #1d4ed8; padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: 0.85rem; display: inline-block; margin-bottom: 12px; }
+    .hero-title { font-size: 3rem; font-weight: 900; color: #2563eb; margin: 5px 0; letter-spacing: 2px; }
+    .hero-desc { font-size: 1rem; color: #475569; line-height: 1.5; margin-bottom: 20px; }
+    .btn-primary { background: #2563eb; color: white; border: none; padding: 16px; border-radius: 14px; font-size: 1.2rem; font-weight: bold; cursor: pointer; width: 100%; box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
+    .btn-primary:active { transform: scale(0.98); }
+
+    /* JUEGO: CABECERA */
+    .level-bar { display: flex; justify-content: space-between; font-size: 0.9rem; font-weight: bold; color: #64748b; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px; }
+    .prompt-title { font-size: 1.85rem; font-weight: 800; color: #0f172a; margin: 12px 0 4px 0; line-height: 1.2; }
+    .prompt-sub { font-size: 0.9rem; color: #64748b; margin-bottom: 10px; }
+
+    /* FRASCO CENTRAL (Igual al boceto) */
+    .jar-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 10px 0; position: relative; }
+    .jar-top { width: 150px; height: 34px; border: 4px solid #0284c7; border-radius: 50%; background: #e0f2fe; z-index: 3; margin-bottom: -17px; }
+    .jar-body { width: 150px; height: 200px; border: 4px solid #0284c7; border-top: none; border-radius: 0 0 45px 45px; position: relative; overflow: hidden; background: rgba(224, 242, 254, 0.25); display: flex; flex-direction: column-reverse; z-index: 2; }
+    .jar-layer { width: 100%; transition: all 0.4s ease; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.85rem; color: #0f172a; }
+    .selected-tags { min-height: 28px; margin-top: 10px; font-size: 0.9rem; color: #0284c7; font-weight: 600; }
+    .btn-clear { background: none; border: none; color: #ef4444; text-decoration: underline; cursor: pointer; font-size: 0.85rem; margin-top: 4px; }
+
+    /* 4 COMPONENTES (Parte inferior) */
+    .ingredients-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+    .ing-btn { background: #f8fafc; border: 2px solid #cbd5e1; border-radius: 12px; padding: 10px 4px; cursor: pointer; display: flex; flex-direction: column; align-items: center; transition: 0.2s; }
+    .ing-btn.selected { border-color: #2563eb; background: #dbeafe; transform: translateY(-3px); }
+    .ing-icon { font-size: 1.9rem; margin-bottom: 4px; }
+    .ing-name { font-size: 0.8rem; font-weight: 700; color: #1e293b; }
+
+    /* BOTONES ANTERIOR Y LISTO (Rojo y Verde como el boceto) */
+    .bottom-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 8px; }
+    .btn-anterior { background: #fee2e2; border: 2px solid #dc2626; color: #991b1b; padding: 14px; border-radius: 10px; font-size: 1.1rem; font-weight: bold; cursor: pointer; }
+    .btn-listo { background: #dcfce7; border: 2px solid #15803d; color: #14532d; padding: 14px; border-radius: 10px; font-size: 1.1rem; font-weight: bold; cursor: pointer; }
+    .btn-anterior:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* CARTEL DE FELICITACIÓN (Modal) */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 50; justify-content: center; align-items: center; padding: 20px; }
+    .modal-overlay.show { display: flex; }
+    .modal-card { background: white; padding: 24px; border-radius: 18px; max-width: 340px; width: 100%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+    .modal-card h3 { font-size: 1.5rem; margin-top: 8px; }
+    .input-field { width: 100%; padding: 12px; margin: 8px 0; border: 2px solid #cbd5e1; border-radius: 10px; font-size: 1rem; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.9rem; }
+    th, td { padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+  </style>
+</head>
+<body>
+
+  <!-- 1. LANDING PAGE -->
+  <section id="screen-landing" class="screen active">
+    <div>
+      <span class="hero-badge">Ciencias Naturales · 4.° y 5.° Grado</span>
+      <h1 class="hero-title">🧪 MIX</h1>
+      <p class="hero-desc">
+        ¡Convertite en científico! Combiná materiales en el frasco para crear <strong>mezclas homogéneas y heterogéneas</strong> a través de 4 niveles interactivos.
+      </p>
+    </div>
+    <div>
+      <div style="font-size: 4.5rem; margin: 15px 0;">🫙✨💧🪨</div>
+      <p style="font-size: 0.9rem; color: #64748b;">
+        • <strong>Homogénea:</strong> No se distinguen sus componentes a simple vista.<br>
+        • <strong>Heterogénea:</strong> Sí se pueden ver sus partes o capas.
+      </p>
+    </div>
+    <button class="btn-primary" onclick="startGame()">¡Empezar a Mezclar!</button>
+  </section>
+
+  <!-- 2. PANTALLA DEL JUEGO (Boceto exacto) -->
+  <section id="screen-game" class="screen">
+    <div>
+      <div class="level-bar">
+        <span id="level-indicator">Nivel 1 de 4</span>
+        <span id="score-indicator">Puntos: 0</span>
+      </div>
+      <h2 id="prompt-text" class="prompt-title">Haz una mezcla Heterogénea</h2>
+      <p id="prompt-hint" class="prompt-sub">Seleccioná al menos 2 componentes para el frasco</p>
+    </div>
+
+    <!-- Frasco Central -->
+    <div class="jar-wrapper">
+      <div class="jar-top"></div>
+      <div class="jar-body" id="jar-contents"></div>
+      <div class="selected-tags" id="selected-names">Frasco vacío</div>
+      <button class="btn-clear" onclick="clearJar()">Vaciar frasco</button>
+    </div>
+
+    <!-- 4 Opciones de Componentes -->
+    <div>
+      <div class="ingredients-grid" id="ingredients-container"></div>
+      <!-- Botones Anterior y Listo -->
+      <div class="bottom-actions">
+        <button id="btn-prev" class="btn-anterior" onclick="prevLevel()">Anterior</button>
+        <button id="btn-check" class="btn-listo" onclick="checkMixture()">Listo</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. PANTALLA FINAL Y RANKING SUPABASE -->
+  <section id="screen-end" class="screen">
+    <div>
+      <h2 style="font-size: 2rem; color: #15803d; margin-bottom: 5px;">🎉 ¡Laboratorio Completado!</h2>
+      <p id="final-score-text" style="font-size: 1.2rem; font-weight: bold;"></p>
+      <input type="text" id="player-name" class="input-field" placeholder="Tu Nombre" />
+      <input type="text" id="player-grade" class="input-field" placeholder="Apellido o Grado (ej: 4to A)" />
+      <button class="btn-primary" onclick="saveScore()" style="margin-top:8px;">Guardar en el Ranking</button>
+    </div>
+    <div style="margin-top: 15px; flex: 1; overflow-y: auto;">
+      <h3 style="margin: 5px 0;">🏆 Mejores Científicos</h3>
+      <table>
+        <thead><tr><th>#</th><th>Alumno</th><th>Grado</th><th>Pts</th></tr></thead>
+        <tbody id="ranking-body"></tbody>
+      </table>
+    </div>
+    <button class="btn-anterior" onclick="location.reload()" style="width:100%; margin-top:10px;">Volver a Jugar</button>
+  </section>
+
+  <!-- CARTEL MODAL DE FELICITACIÓN / PISTA -->
+  <div id="feedback-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div id="modal-icon" style="font-size: 3.2rem;">🎉</div>
+      <h3 id="modal-title">¡Excelente!</h3>
+      <p id="modal-msg" style="color: #475569; line-height: 1.4;"></p>
+      <button id="modal-btn" class="btn-primary" onclick="closeModal()">Siguiente Nivel</button>
+    </div>
+  </div>
+
+  <script>
+    // Los 4 niveles del juego MIX
+    const levels = [
+      {
+        target: "Heterogénea",
+        title: "Haz una mezcla Heterogénea",
+        hint: "Elegí 2 o más materiales que NO se disuelvan entre sí (que se vean sus partes).",
+        options: [
+          { id: "aceite", name: "Aceite", icon: "🛢️", color: "#fde047", solubleInWater: false },
+          { id: "agua", name: "Agua", icon: "💧", color: "#60a5fa", isWater: true },
+          { id: "rocas", name: "Rocas", icon: "🪨", color: "#94a3b8", solubleInWater: false },
+          { id: "azucar", name: "Azúcar", icon: "🧂", color: "#f8fafc", solubleInWater: true }
+        ]
+      },
+      {
+        target: "Homogénea",
+        title: "Haz una mezcla Homogénea",
+        hint: "Elegí 2 materiales que se integren por completo formando una sola fase uniforme.",
+        options: [
+          { id: "aceite", name: "Aceite", icon: "🛢️", color: "#fde047", solubleInWater: false },
+          { id: "agua", name: "Agua", icon: "💧", color: "#60a5fa", isWater: true },
+          { id: "rocas", name: "Rocas", icon: "🪨", color: "#94a3b8", solubleInWater: false },
+          { id: "azucar", name: "Azúcar", icon: "🧂", color: "#bae6fd", solubleInWater: true }
+        ]
+      },
+      {
+        target: "Heterogénea",
+        title: "Haz una mezcla Heterogénea",
+        hint: "Nivel 3: Buscá materiales que queden separados en el frasco.",
+        options: [
+          { id: "agua", name: "Agua", icon: "💧", color: "#60a5fa", isWater: true },
+          { id: "arena", name: "Arena", icon: "🏖️", color: "#fcd34d", solubleInWater: false },
+          { id: "sal", name: "Sal", icon: "🧂", color: "#bae6fd", solubleInWater: true },
+          { id: "corcho", name: "Corchos", icon: "🪵", color: "#d97706", solubleInWater: false }
+        ]
+      },
+      {
+        target: "Homogénea",
+        title: "Haz una mezcla Homogénea",
+        hint: "Nivel Final: Prepará una solución líquida donde no se distingan los componentes.",
+        options: [
+          { id: "agua", name: "Agua", icon: "💧", color: "#60a5fa", isWater: true },
+          { id: "jugo", name: "Jugo en polvo", icon: "🍊", color: "#fb923c", solubleInWater: true },
+          { id: "piedras", name: "Piedritas", icon: "🪨", color: "#64748b", solubleInWater: false },
+          { id: "aceite", name: "Aceite", icon: "🛢️", color: "#fde047", solubleInWater: false }
+        ]
+      }
+    ];
+
+    let currentLevel = 0;
+    let selected = [];
+    let score = 0;
+    let levelPassed = false;
+
+    function startGame() {
+      document.getElementById('screen-landing').classList.remove('active');
+      document.getElementById('screen-game').classList.add('active');
+      loadLevel();
+    }
+
+    function loadLevel() {
+      selected = [];
+      const lvl = levels[currentLevel];
+      document.getElementById('level-indicator').textContent = `Nivel ${currentLevel + 1} de 4`;
+      document.getElementById('score-indicator').textContent = `Puntos: ${score}`;
+      document.getElementById('prompt-text').textContent = lvl.title;
+      document.getElementById('prompt-hint').textContent = lvl.hint;
+      document.getElementById('btn-prev').disabled = (currentLevel === 0);
+
+      const container = document.getElementById('ingredients-container');
+      container.innerHTML = '';
+      lvl.options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = 'ing-btn';
+        btn.id = `btn-${opt.id}`;
+        btn.innerHTML = `<span class="ing-icon">${opt.icon}</span><span class="ing-name">${opt.name}</span>`;
+        btn.onclick = () => toggleIngredient(opt);
+        container.appendChild(btn);
+      });
+      renderJar();
+    }
+
+    function toggleIngredient(opt) {
+      const exists = selected.find(item => item.id === opt.id);
+      if (exists) {
+        selected = selected.filter(item => item.id !== opt.id);
+        document.getElementById(`btn-${opt.id}`).classList.remove('selected');
+      } else {
+        selected.push(opt);
+        document.getElementById(`btn-${opt.id}`).classList.add('selected');
+      }
+      renderJar();
+    }
+
+    function clearJar() {
+      selected = [];
+      document.querySelectorAll('.ing-btn').forEach(b => b.classList.remove('selected'));
+      renderJar();
+    }
+
+    function renderJar() {
+      const jar = document.getElementById('jar-contents');
+      const tags = document.getElementById('selected-names');
+      jar.innerHTML = '';
+      if (selected.length === 0) {
+        tags.textContent = "Frasco vacío (tocá los componentes de abajo)";
+        return;
+      }
+      tags.textContent = "En el frasco: " + selected.map(s => s.name).join(' + ');
+
+      const isHomogeneous = checkIsHomogeneous();
+      if (isHomogeneous && selected.length >= 2) {
+        // Si es homogénea, se ve como una única fase uniforme
+        const unified = document.createElement('div');
+        unified.className = 'jar-layer';
+        unified.style.height = '75%';
+        const customColor = selected.find(s => !s.isWater)?.color || '#38bdf8';
+        unified.style.background = customColor;
+        unified.textContent = "1 sola fase uniforme ✨";
+        jar.appendChild(unified);
+      } else {
+        // Si es heterogénea, se ven las capas separadas
+        const heightPerItem = Math.min(85 / selected.length, 40);
+        selected.forEach(item => {
+          const layer = document.createElement('div');
+          layer.className = 'jar-layer';
+          layer.style.height = `${heightPerItem}%`;
+          layer.style.background = item.color;
+          layer.textContent = `${item.icon} ${item.name}`;
+          jar.appendChild(layer);
+        });
+      }
+    }
+
+    function checkIsHomogeneous() {
+      const hasWater = selected.some(s => s.isWater);
+      const allSoluble = selected.every(s => s.isWater || s.solubleInWater);
+      return hasWater && allSoluble && selected.length >= 2;
+    }
+
+    function checkMixture() {
+      if (selected.length < 2) {
+        showModal("⚠️ ¡Faltan materiales!", "Para hacer una mezcla tenés que elegir al menos 2 componentes de abajo.", false);
+        return;
+      }
+      const lvl = levels[currentLevel];
+      const isHomo = checkIsHomogeneous();
+      const currentType = isHomo ? "Homogénea" : "Heterogénea";
+
+      if (currentType === lvl.target) {
+        score += 250;
+        const explanation = isHomo
+          ? `¡Muy bien! Al mezclar ${selected.map(s=>s.name).join(' y ')}, se disuelven formando una mezcla HOMOGÉNEA (no se distinguen sus partes).`
+          : `¡Excelente! Al juntar ${selected.map(s=>s.name).join(' y ')}, sus componentes se siguen viendo por separado. ¡Es HETEROGÉNEA!`;
+        showModal("🎉 ¡Felicitaciones!", explanation, true);
+      } else {
+        const hint = lvl.target === "Homogénea"
+          ? "Esa mezcla quedó separada en partes (es heterogénea). Probá mezclar Agua con algo que se disuelva como Azúcar, Sal o Jugo."
+          : "Esos materiales se disolvieron por completo (es homogénea). Para que sea heterogénea, agregá Aceite, Rocas o Arena.";
+        showModal("🧐 ¡Casi! Intentá de nuevo", hint, false);
+      }
+    }
+
+    function showModal(title, msg, passed) {
+      levelPassed = passed;
+      document.getElementById('modal-icon').textContent = passed ? "🎉" : "🧪";
+      document.getElementById('modal-title').textContent = title;
+      document.getElementById('modal-msg').textContent = msg;
+      document.getElementById('modal-btn').textContent = passed
+        ? (currentLevel < 3 ? "Pasar al Siguiente Nivel ➡️" : "Ver Puntaje Final 🏆")
+        : "Seguir intentando";
+      document.getElementById('feedback-modal').classList.add('show');
+    }
+
+    function closeModal() {
+      document.getElementById('feedback-modal').classList.remove('show');
+      if (levelPassed) {
+        if (currentLevel < 3) {
+          currentLevel++;
+          loadLevel();
+        } else {
+          finishGame();
+        }
+      }
+    }
+
+    function prevLevel() {
+      if (currentLevel > 0) {
+        currentLevel--;
+        loadLevel();
+      }
+    }
+
+    // SUPABASE Y RANKING (Punto F del apunte)
+   const SUPABASE_URL = "https://hngetlbpunxewcmnubye.supabase.co"; 
+   const SUPABASE_KEY = "sb_publishable_EmWmeadreder1qjgh22i8Q_boEwttGk";
+    let supabaseClient = null;
+    if (SUPABASE_URL.startsWith("http")) {
+      supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    }
+
+    function finishGame() {
+      document.getElementById('screen-game').classList.remove('active');
+      document.getElementById('screen-end').classList.add('active');
+      document.getElementById('final-score-text').textContent = `Puntaje obtenido: ${score} puntos`;
+      loadRanking();
+    }
+
+    async function saveScore() {
+      const nombre = document.getElementById('player-name').value.trim() || "Científico";
+      const referencia = document.getElementById('player-grade').value.trim() || "4to/5to";
+      if (supabaseClient) {
+        await supabaseClient.from('scores').insert([{ nombre, referencia, puntuacion: score }]);
+      } else {
+        const local = JSON.parse(localStorage.getItem('mix_scores') || '[]');
+        local.push({ nombre, referencia, puntuacion: score });
+        localStorage.setItem('mix_scores', JSON.stringify(local));
+      }
+      loadRanking();
+    }
+
+    async function loadRanking() {
+      let data = [];
+      if (supabaseClient) {
+        const res = await supabaseClient.from('scores').select('*').order('puntuacion', { ascending: false }).limit(10);
+        data = res.data || [];
+      } else {
+        data = JSON.parse(localStorage.getItem('mix_scores') || '[]').sort((a,b) => b.puntuacion - a.puntuacion);
+      }
+      const tbody = document.getElementById('ranking-body');
+      tbody.innerHTML = data.map((r, i) => `<tr><td>${i+1}</td><td>${r.nombre}</td><td>${r.referencia}</td><td><strong>${r.puntuacion}</strong></td></tr>`).join('');
+    }
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>
